@@ -51,15 +51,12 @@ class BitParser:
         p: BitParserState = root
         b = None
         for i in range(len(bits)):
-            if 0 < i:
+            if i > 0:
                 assert b is not None
                 if p[b] is None:
                     p[b] = [None, None]
                 p = p[b]
-            if bits[i] == "1":
-                b = 1
-            else:
-                b = 0
+            b = 1 if bits[i] == "1" else 0
         assert b is not None
         p[b] = v
 
@@ -69,10 +66,7 @@ class BitParser:
                 self._parse_bit(byte & m)
 
     def _parse_bit(self, x: object) -> None:
-        if x:
-            v = self._state[1]
-        else:
-            v = self._state[0]
+        v = self._state[1] if x else self._state[0]
         self._pos += 1
         if isinstance(v, list):
             self._state = v
@@ -369,10 +363,7 @@ class CCITTG4Parser(BitParser):
         elif mode == "h":
             self._n1 = 0
             self._accept = self._parse_horiz1
-            if self._color:
-                return self.WHITE
-            else:
-                return self.BLACK
+            return self.WHITE if self._color else self.BLACK
         elif mode == "u":
             self._accept = self._parse_uncompressed
             return self.UNCOMPRESSED
@@ -393,10 +384,7 @@ class CCITTG4Parser(BitParser):
             self._n2 = 0
             self._color = 1 - self._color
             self._accept = self._parse_horiz2
-        if self._color:
-            return self.WHITE
-        else:
-            return self.BLACK
+        return self.WHITE if self._color else self.BLACK
 
     def _parse_horiz2(self, n: Any) -> BitParserState:
         if n is None:
@@ -529,8 +517,7 @@ class CCITTG4Parser(BitParser):
         return
 
     def _do_horizontal(self, n1: int, n2: int) -> None:
-        if self._curpos < 0:
-            self._curpos = 0
+        self._curpos = max(self._curpos, 0)
         x = self._curpos
         for _ in range(n1):
             if len(self._curline) <= x:
@@ -578,13 +565,12 @@ class CCITTFaxDecoder(CCITTG4Parser):
 
 def ccittfaxdecode(data: bytes, params: Dict[str, object]) -> bytes:
     K = params.get("K")
-    if K == -1:
-        cols = cast(int, params.get("Columns"))
-        bytealign = cast(bool, params.get("EncodedByteAlign"))
-        reversed = cast(bool, params.get("BlackIs1"))
-        parser = CCITTFaxDecoder(cols, bytealign=bytealign, reversed=reversed)
-    else:
+    if K != -1:
         raise ValueError(K)
+    cols = cast(int, params.get("Columns"))
+    bytealign = cast(bool, params.get("EncodedByteAlign"))
+    reversed = cast(bool, params.get("BlackIs1"))
+    parser = CCITTFaxDecoder(cols, bytealign=bytealign, reversed=reversed)
     parser.feedbytes(data)
     return parser.close()
 

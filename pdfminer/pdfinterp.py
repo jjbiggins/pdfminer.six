@@ -201,15 +201,14 @@ class PDFResourceManager:
             font = self._cached_fonts[objid]
         else:
             log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
-            if settings.STRICT:
-                if spec["Type"] is not LITERAL_FONT:
-                    raise PDFFontError("Type is not /Font")
+            if settings.STRICT and spec["Type"] is not LITERAL_FONT:
+                raise PDFFontError("Type is not /Font")
             # Create a Font object.
             if "Subtype" in spec:
                 subtype = literal_name(spec["Subtype"])
+            elif settings.STRICT:
+                raise PDFFontError("Font Subtype is not specified.")
             else:
-                if settings.STRICT:
-                    raise PDFFontError("Font Subtype is not specified.")
                 subtype = "Type1"
             if subtype in ("Type1", "MMType1"):
                 # Type1 Font
@@ -232,9 +231,9 @@ class PDFResourceManager:
                     if k in spec:
                         subspec[k] = resolve1(spec[k])
                 font = self.get_font(None, subspec)
+            elif settings.STRICT:
+                raise PDFFontError("Invalid Font spec: %r" % spec)
             else:
-                if settings.STRICT:
-                    raise PDFFontError("Invalid Font spec: %r" % spec)
                 font = PDFType1Font(self, spec)  # this is so wrong!
             if objid and self.caching:
                 self._cached_fonts[objid] = font
@@ -252,11 +251,10 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
 
     def fillfp(self) -> None:
         if not self.fp:
-            if self.istream < len(self.streams):
-                strm = stream_value(self.streams[self.istream])
-                self.istream += 1
-            else:
+            if self.istream >= len(self.streams):
                 raise PSEOF("Unexpected EOF, file truncated?")
+            strm = stream_value(self.streams[self.istream])
+            self.istream += 1
             self.fp = BytesIO(strm.get_data())
 
     def seek(self, pos: int) -> None:
@@ -362,13 +360,10 @@ class PDFPageInterpreter:
             return
 
         def get_colorspace(spec: object) -> Optional[PDFColorSpace]:
-            if isinstance(spec, list):
-                name = literal_name(spec[0])
-            else:
-                name = literal_name(spec)
-            if name == "ICCBased" and isinstance(spec, list) and 2 <= len(spec):
+            name = literal_name(spec[0]) if isinstance(spec, list) else literal_name(spec)
+            if name == "ICCBased" and isinstance(spec, list) and len(spec) >= 2:
                 return PDFColorSpace(name, stream_value(spec[1])["N"])
-            elif name == "DeviceN" and isinstance(spec, list) and 2 <= len(spec):
+            elif name == "DeviceN" and isinstance(spec, list) and len(spec) >= 2:
                 return PDFColorSpace(name, len(list_value(spec[1])))
             else:
                 return PREDEFINED_COLORSPACE.get(name)
@@ -693,9 +688,9 @@ class PDFPageInterpreter:
         """Set color for stroking operations."""
         if self.scs:
             n = self.scs.ncomponents
+        elif settings.STRICT:
+            raise PDFInterpreterError("No colorspace specified!")
         else:
-            if settings.STRICT:
-                raise PDFInterpreterError("No colorspace specified!")
             n = 1
         self.graphicstate.scolor = cast(Color, self.pop(n))
         return
@@ -704,9 +699,9 @@ class PDFPageInterpreter:
         """Set color for nonstroking operations"""
         if self.ncs:
             n = self.ncs.ncomponents
+        elif settings.STRICT:
+            raise PDFInterpreterError("No colorspace specified!")
         else:
-            if settings.STRICT:
-                raise PDFInterpreterError("No colorspace specified!")
             n = 1
         self.graphicstate.ncolor = cast(Color, self.pop(n))
         return
@@ -933,7 +928,7 @@ class PDFPageInterpreter:
     def do_EI(self, obj: PDFStackT) -> None:
         """End inline image object"""
         if isinstance(obj, PDFStream) and "W" in obj and "H" in obj:
-            iobjid = str(id(obj))
+            iobjid = id(obj)
             self.device.begin_figure(iobjid, (0, 0, 1, 1), MATRIX_IDENTITY)
             self.device.render_image(iobjid, obj)
             self.device.end_figure(iobjid)
@@ -954,11 +949,7 @@ class PDFPageInterpreter:
             interpreter = self.dup()
             bbox = cast(Rect, list_value(xobj["BBox"]))
             matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
-            # According to PDF reference 1.7 section 4.9.1, XObjects in
-            # earlier PDFs (prior to v1.2) use the page's Resources entry
-            # instead of having their own Resources entry.
-            xobjres = xobj.get("Resources")
-            if xobjres:
+            if xobjres := xobj.get("Resources"):
                 resources = dict_value(xobjres)
             else:
                 resources = self.resources.copy()
@@ -971,9 +962,6 @@ class PDFPageInterpreter:
             self.device.begin_figure(xobjid, (0, 0, 1, 1), MATRIX_IDENTITY)
             self.device.render_image(xobjid, xobj)
             self.device.end_figure(xobjid)
-        else:
-            # unsupported xobject type.
-            pass
         return
 
     def process_page(self, page: PDFPage) -> None:
@@ -1028,8 +1016,7 @@ class PDFPageInterpreter:
                 )
                 if hasattr(self, method):
                     func = getattr(self, method)
-                    nargs = func.__code__.co_argcount - 1
-                    if nargs:
+                    if nargs := func.__code__.co_argcount - 1:
                         args = self.pop(nargs)
                         log.debug("exec: %s %r", name, args)
                         if len(args) == nargs:
@@ -1037,10 +1024,9 @@ class PDFPageInterpreter:
                     else:
                         log.debug("exec: %s", name)
                         func()
-                else:
-                    if settings.STRICT:
-                        error_msg = "Unknown operator: %r" % name
-                        raise PDFInterpreterError(error_msg)
+                elif settings.STRICT:
+                    error_msg = "Unknown operator: %r" % name
+                    raise PDFInterpreterError(error_msg)
             else:
                 self.push(obj)
         return

@@ -11,7 +11,7 @@ from typing import Sequence
 class Arcfour:
     def __init__(self, key: Sequence[int]) -> None:
         # because Py3 range is not indexable
-        s = [i for i in range(256)]
+        s = list(range(256))
         j = 0
         klen = len(key)
         for i in range(256):

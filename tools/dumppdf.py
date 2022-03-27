@@ -23,10 +23,7 @@ ESC_PAT = re.compile(r'[\000-\037&<>()"\042\047\134\177-\377]')
 
 
 def escape(s: Union[str, bytes]) -> str:
-    if isinstance(s, bytes):
-        us = str(s, "latin-1")
-    else:
-        us = s
+    us = str(s, "latin-1") if isinstance(s, bytes) else s
     return ESC_PAT.sub(lambda m: "&#%d;" % ord(m.group(0)), us)
 
 
@@ -80,16 +77,16 @@ def dumpxml(out: TextIO, obj: object, codec: Optional[str] = None) -> None:
 
     if isinstance(obj, PSKeyword):
         # Likely bug: obj.name is bytes, not str
-        out.write("<keyword>%s</keyword>" % obj.name)  # type: ignore [str-bytes-safe]
+        out.write(f"<keyword>{obj.name}</keyword>")
         return
 
     if isinstance(obj, PSLiteral):
         # Likely bug: obj.name may be bytes, not str
-        out.write("<literal>%s</literal>" % obj.name)  # type: ignore [str-bytes-safe]
+        out.write(f"<literal>{obj.name}</literal>")
         return
 
     if isnumber(obj):
-        out.write("<number>%s</number>" % obj)
+        out.write(f"<number>{obj}</number>")
         return
 
     raise TypeError(obj)
@@ -227,9 +224,8 @@ def extractembedded(fname: str, password: str, extractdir: str) -> None:
             raise IOError("file exists: %r" % path)
         print("extracting: %r" % path)
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        out = open(path, "wb")
-        out.write(fileobj.get_data())
-        out.close()
+        with open(path, "wb") as out:
+            out.write(fileobj.get_data())
         return
 
     with open(fname, "rb") as fp:
@@ -260,27 +256,26 @@ def dumppdf(
     extractdir: Optional[str] = None,
     show_fallback_xref: bool = False,
 ) -> None:
-    fp = open(fname, "rb")
-    parser = PDFParser(fp)
-    doc = PDFDocument(parser, password)
-    if objids:
-        for objid in objids:
-            obj = doc.getobj(objid)
-            dumpxml(outfp, obj, codec=codec)
-    if pagenos:
-        for (pageno, page) in enumerate(PDFPage.create_pages(doc)):
-            if pageno in pagenos:
-                if codec:
-                    for obj in page.contents:
-                        obj = stream_value(obj)
-                        dumpxml(outfp, obj, codec=codec)
-                else:
-                    dumpxml(outfp, page.attrs)
-    if dumpall:
-        dumpallobjs(outfp, doc, codec, show_fallback_xref)
-    if (not objids) and (not pagenos) and (not dumpall):
-        dumptrailers(outfp, doc, show_fallback_xref)
-    fp.close()
+    with open(fname, "rb") as fp:
+        parser = PDFParser(fp)
+        doc = PDFDocument(parser, password)
+        if objids:
+            for objid in objids:
+                obj = doc.getobj(objid)
+                dumpxml(outfp, obj, codec=codec)
+        if pagenos:
+            for (pageno, page) in enumerate(PDFPage.create_pages(doc)):
+                if pageno in pagenos:
+                    if codec:
+                        for obj in page.contents:
+                            obj = stream_value(obj)
+                            dumpxml(outfp, obj, codec=codec)
+                    else:
+                        dumpxml(outfp, page.attrs)
+        if dumpall:
+            dumpallobjs(outfp, doc, codec, show_fallback_xref)
+        if (not objids) and (not pagenos) and (not dumpall):
+            dumptrailers(outfp, doc, show_fallback_xref)
     if codec not in ("raw", "binary"):
         outfp.write("\n")
     return
@@ -300,8 +295,9 @@ def create_parser() -> ArgumentParser:
         "--version",
         "-v",
         action="version",
-        version="pdfminer.six v{}".format(pdfminer.__version__),
+        version=f"pdfminer.six v{pdfminer.__version__}",
     )
+
     parser.add_argument(
         "--debug",
         "-d",
@@ -411,16 +407,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    if args.outfile == "-":
-        outfp = sys.stdout
-    else:
-        outfp = open(args.outfile, "w")
-
-    if args.objects:
-        objids = [int(x) for x in args.objects.split(",")]
-    else:
-        objids = []
-
+    outfp = sys.stdout if args.outfile == "-" else open(args.outfile, "w")
+    objids = [int(x) for x in args.objects.split(",")] if args.objects else []
     if args.page_numbers:
         pagenos = {x - 1 for x in args.page_numbers}
     elif args.pagenos:

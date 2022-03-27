@@ -267,18 +267,19 @@ class PDFConverter(PDFLayoutAnalyzer, Generic[IOType]):
     @staticmethod
     def _is_binary_stream(outfp: AnyIO) -> bool:
         """Test if an stream is binary or not"""
-        if "b" in getattr(outfp, "mode", ""):
+        if (
+            "b" in getattr(outfp, "mode", "")
+            or not hasattr(outfp, "mode")
+            and isinstance(outfp, io.BytesIO)
+        ):
             return True
-        elif hasattr(outfp, "mode"):
+        elif (
+            hasattr(outfp, "mode")
+            or isinstance(outfp, io.StringIO)
+            or isinstance(outfp, io.TextIOBase)
+        ):
             # output stream has a mode, but it does not contain 'b'
             return False
-        elif isinstance(outfp, io.BytesIO):
-            return True
-        elif isinstance(outfp, io.StringIO):
-            return False
-        elif isinstance(outfp, io.TextIOBase):
-            return False
-
         return True
 
 
@@ -425,9 +426,7 @@ class HTMLConverter(PDFConverter[AnyIO]):
         return
 
     def write_footer(self) -> None:
-        page_links = [
-            '<a href="#{}">{}</a>'.format(i, i) for i in range(1, self.pageno)
-        ]
+        page_links = [f'<a href="#{i}">{i}</a>' for i in range(1, self.pageno)]
         s = '<div style="position:absolute; top:0px;">Page: %s</div>\n' % ", ".join(
             page_links
         )
@@ -595,48 +594,28 @@ class HTMLConverter(PDFConverter[AnyIO]):
                 self.end_div("figure")
             elif isinstance(item, LTImage):
                 self.place_image(item, 1, item.x0, item.y1, item.width, item.height)
-            else:
+            elif isinstance(item, LTTextLine):
                 if self.layoutmode == "exact":
-                    if isinstance(item, LTTextLine):
-                        self.place_border("textline", 1, item)
-                        for child in item:
-                            render(child)
-                    elif isinstance(item, LTTextBox):
-                        self.place_border("textbox", 1, item)
-                        self.place_text(
-                            "textbox", str(item.index + 1), item.x0, item.y1, 20
-                        )
-                        for child in item:
-                            render(child)
-                    elif isinstance(item, LTChar):
-                        self.place_border("char", 1, item)
-                        self.place_text(
-                            "char", item.get_text(), item.x0, item.y1, item.size
-                        )
+                    self.place_border("textline", 1, item)
+                    for child in item:
+                        render(child)
                 else:
-                    if isinstance(item, LTTextLine):
-                        for child in item:
-                            render(child)
-                        if self.layoutmode != "loose":
-                            self.put_newline()
-                    elif isinstance(item, LTTextBox):
-                        self.begin_div(
-                            "textbox",
-                            1,
-                            item.x0,
-                            item.y1,
-                            item.width,
-                            item.height,
-                            item.get_writing_mode(),
-                        )
-                        for child in item:
-                            render(child)
-                        self.end_div("textbox")
-                    elif isinstance(item, LTChar):
-                        fontname = make_compat_str(item.fontname)
-                        self.put_text(item.get_text(), fontname, item.size)
-                    elif isinstance(item, LTText):
-                        self.write_text(item.get_text())
+                    for child in item:
+                        render(child)
+                    if self.layoutmode != "loose":
+                        self.put_newline()
+            elif isinstance(item, LTTextBox):
+                self.place_border("textbox", 1, item)
+                self.place_text(
+                    "textbox", str(item.index + 1), item.x0, item.y1, 20
+                )
+                for child in item:
+                    render(child)
+            elif isinstance(item, LTChar):
+                self.place_border("char", 1, item)
+                self.place_text(
+                    "char", item.get_text(), item.x0, item.y1, item.size
+                )
             return
 
         render(ltpage)
@@ -762,9 +741,7 @@ class XMLConverter(PDFConverter[AnyIO]):
                     render(child)
                 self.write("</textline>\n")
             elif isinstance(item, LTTextBox):
-                wmode = ""
-                if isinstance(item, LTTextBoxVertical):
-                    wmode = ' wmode="vertical"'
+                wmode = ' wmode="vertical"' if isinstance(item, LTTextBoxVertical) else ""
                 s = '<textbox id="%d" bbox="%s"%s>\n' % (
                     item.index,
                     bbox2str(item.bbox),

@@ -24,7 +24,7 @@ def ascii85decode(data: bytes) -> bytes:
     out = b""
     for i in iter(data):
         c = bytes((i,))
-        if b"!" <= c and c <= b"u":
+        if b"!" <= c <= b"u":
             n += 1
             b = b * 85 + (ord(c) - 33)
             if n == 5:

@@ -68,10 +68,7 @@ class PDFPage:
         self.rotate = (int_value(self.attrs.get("Rotate", 0)) + 360) % 360
         self.annots = self.attrs.get("Annots")
         self.beads = self.attrs.get("B")
-        if "Contents" in self.attrs:
-            contents = resolve1(self.attrs["Contents"])
-        else:
-            contents = []
+        contents = resolve1(self.attrs["Contents"]) if "Contents" in self.attrs else []
         if not isinstance(contents, list):
             contents = [contents]
         self.contents: List[object] = contents

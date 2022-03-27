@@ -82,7 +82,7 @@ class CMap(CMapBase):
         self.code2cid: Dict[int, object] = {}
 
     def __repr__(self) -> str:
-        return "<CMap: %s>" % self.attrs.get("CMapName")
+        return f'<CMap: {self.attrs.get("CMapName")}>'
 
     def use_cmap(self, cmap: CMapBase) -> None:
         assert isinstance(cmap, CMap), str(type(cmap))
@@ -131,20 +131,12 @@ class CMap(CMapBase):
 
 class IdentityCMap(CMapBase):
     def decode(self, code: bytes) -> Tuple[int, ...]:
-        n = len(code) // 2
-        if n:
-            return struct.unpack(">%dH" % n, code)
-        else:
-            return ()
+        return struct.unpack(">%dH" % n, code) if (n := len(code) // 2) else ()
 
 
 class IdentityCMapByte(IdentityCMap):
     def decode(self, code: bytes) -> Tuple[int, ...]:
-        n = len(code)
-        if n:
-            return struct.unpack(">%dB" % n, code)
-        else:
-            return ()
+        return struct.unpack(">%dB" % n, code) if (n := len(code)) else ()
 
 
 class UnicodeMap(CMapBase):
@@ -153,7 +145,7 @@ class UnicodeMap(CMapBase):
         self.cid2unichr: Dict[int, str] = {}
 
     def __repr__(self) -> str:
-        return "<UnicodeMap: %s>" % self.attrs.get("CMapName")
+        return f'<UnicodeMap: {self.attrs.get("CMapName")}>'
 
     def get_unichr(self, cid: int) -> str:
         log.debug("get_unichr: %r, %r", self, cid)
@@ -234,7 +226,7 @@ class CMapDB:
     @classmethod
     def _load_data(cls, name: str) -> Any:
         name = name.replace("\0", "")
-        filename = "%s.pickle.gz" % name
+        filename = f"{name}.pickle.gz"
         log.debug("loading: %r", name)
         cmap_paths = (
             os.environ.get("CMAP_PATH", "/usr/share/pdfminer/"),
@@ -245,11 +237,10 @@ class CMapDB:
             if os.path.exists(path):
                 gzfile = gzip.open(path)
                 try:
-                    return type(str(name), (), pickle.loads(gzfile.read()))
+                    return type(name, (), pickle.loads(gzfile.read()))
                 finally:
                     gzfile.close()
-        else:
-            raise CMapDB.CMapNotFound(name)
+        raise CMapDB.CMapNotFound(name)
 
     @classmethod
     def get_cmap(cls, name: str) -> CMapBase:
@@ -275,7 +266,7 @@ class CMapDB:
             return cls._umap_cache[name][vertical]
         except KeyError:
             pass
-        data = cls._load_data("to-unicode-%s" % name)
+        data = cls._load_data(f"to-unicode-{name}")
         cls._umap_cache[name] = [PyUnicodeMap(name, data, v) for v in (False, True)]
         return cls._umap_cache[name][vertical]
 
@@ -479,10 +470,9 @@ class CMapParser(PSStackParser[PSKeyword]):
 def main(argv: List[str]) -> None:
     args = argv[1:]
     for fname in args:
-        fp = open(fname, "rb")
-        cmap = FileUnicodeMap()
-        CMapParser(cmap, fp).run()
-        fp.close()
+        with open(fname, "rb") as fp:
+            cmap = FileUnicodeMap()
+            CMapParser(cmap, fp).run()
         cmap.dump()
     return
 

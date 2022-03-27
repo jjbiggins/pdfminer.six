@@ -91,9 +91,8 @@ class PDFNotImplementedError(PDFException):
 
 class PDFObjRef(PDFObject):
     def __init__(self, doc: Optional["PDFDocument"], objid: int, _: object) -> None:
-        if objid == 0:
-            if settings.STRICT:
-                raise PDFValueError("PDF object id cannot be 0.")
+        if objid == 0 and settings.STRICT:
+            raise PDFValueError("PDF object id cannot be 0.")
         self.doc = doc
         self.objid = objid
 
@@ -177,10 +176,7 @@ def num_value(x: object) -> float:
 def uint_value(x: object, n_bits: int) -> int:
     """Resolve number and interpret it as a two's-complement unsigned number"""
     xi = int_value(x)
-    if xi > 0:
-        return xi
-    else:
-        return xi + cast(int, 2**n_bits)
+    return xi if xi > 0 else xi + cast(int, 2**n_bits)
 
 
 def str_value(x: object) -> bytes:
@@ -373,7 +369,7 @@ class PDFStream(PDFObject):
                 if pred == 1:
                     # no predictor
                     pass
-                elif 10 <= pred:
+                elif pred >= 10:
                     # PNG predictor
                     colors = int_value(params.get("Colors", 1))
                     columns = int_value(params.get("Columns", 1))

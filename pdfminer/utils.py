@@ -56,7 +56,7 @@ class open_filename(object):
             self.file_handler = cast(AnyIO, filename)
             self.closing = False
         else:
-            raise TypeError("Unsupported input type: %s" % type(filename))
+            raise TypeError(f"Unsupported input type: {type(filename)}")
 
     def __enter__(self) -> AnyIO:
         return self.file_handler
@@ -74,24 +74,22 @@ def make_compat_bytes(in_str: str) -> bytes:
 
 def make_compat_str(o: object) -> str:
     """Converts everything to string, if bytes guessing the encoding."""
-    if isinstance(o, bytes):
-        enc = chardet.detect(o)
-        try:
-            return o.decode(enc["encoding"])
-        except UnicodeDecodeError:
-            return str(o)
-    else:
+    if not isinstance(o, bytes):
+        return str(o)
+    enc = chardet.detect(o)
+    try:
+        return o.decode(enc["encoding"])
+    except UnicodeDecodeError:
         return str(o)
 
 
 def shorten_str(s: str, size: int) -> str:
     if size < 7:
         return s[:size]
-    if len(s) > size:
-        length = (size - 5) // 2
-        return "{} ... {}".format(s[:length], s[-length:])
-    else:
+    if len(s) <= size:
         return s
+    length = (size - 5) // 2
+    return f"{s[:length]} ... {s[-length:]}"
 
 
 def compatible_encode_method(
@@ -157,12 +155,8 @@ def apply_png_predictor(
             # (computed mod 256), where Raw() refers to the bytes already
             #  decoded.
             for j, sub_x in enumerate(line_encoded):
-                if j - bpp < 0:
-                    raw_x_bpp = 0
-                else:
-                    raw_x_bpp = int(raw[j - bpp])
-                raw_x = (sub_x + raw_x_bpp) & 255
-                raw += bytes((raw_x,))
+                raw_x_bpp = 0 if j - bpp < 0 else int(raw[j - bpp])
+                raw += bytes(((sub_x + raw_x_bpp) & 255, ))
 
         elif filter_type == 2:
             # Filter type 2: Up
@@ -172,8 +166,7 @@ def apply_png_predictor(
             # (computed mod 256), where Prior() refers to the decoded bytes of
             # the prior scanline.
             for (up_x, prior_x) in zip(line_encoded, line_above):
-                raw_x = (up_x + prior_x) & 255
-                raw += bytes((raw_x,))
+                raw += bytes(((up_x + prior_x) & 255, ))
 
         elif filter_type == 3:
             # Filter type 3: Average
@@ -185,13 +178,9 @@ def apply_png_predictor(
             # bytes already decoded, and Prior() refers to the decoded bytes of
             # the prior scanline.
             for j, average_x in enumerate(line_encoded):
-                if j - bpp < 0:
-                    raw_x_bpp = 0
-                else:
-                    raw_x_bpp = int(raw[j - bpp])
+                raw_x_bpp = 0 if j - bpp < 0 else int(raw[j - bpp])
                 prior_x = int(line_above[j])
-                raw_x = (average_x + (raw_x_bpp + prior_x) // 2) & 255
-                raw += bytes((raw_x,))
+                raw += bytes(((average_x + (raw_x_bpp + prior_x) // 2) & 255, ))
 
         elif filter_type == 4:
             # Filter type 4: Paeth
@@ -211,8 +200,7 @@ def apply_png_predictor(
                     prior_x_bpp = int(line_above[j - bpp])
                 prior_x = int(line_above[j])
                 paeth = paeth_predictor(raw_x_bpp, prior_x, prior_x_bpp)
-                raw_x = (paeth_x + paeth) & 255
-                raw += bytes((raw_x,))
+                raw += bytes(((paeth_x + paeth) & 255, ))
 
         else:
             raise ValueError("Unsupported predictor value: %d" % filter_type)
@@ -636,9 +624,7 @@ def decode_text(s: bytes) -> str:
 
 def enc(x: str) -> str:
     """Encodes a string for SGML/XML/HTML"""
-    if isinstance(x, bytes):
-        return ""
-    return escape(x)
+    return "" if isinstance(x, bytes) else escape(x)
 
 
 def bbox2str(bbox: Rect) -> str:
@@ -668,13 +654,12 @@ def vecBetweenBoxes(obj1: "LTComponent", obj2: "LTComponent") -> Point:
     (x1, y1) = (max(obj1.x1, obj2.x1), max(obj1.y1, obj2.y1))
     (ow, oh) = (x1 - x0, y1 - y0)
     (iw, ih) = (ow - obj1.width - obj2.width, oh - obj1.height - obj2.height)
-    if iw < 0 and ih < 0:
-        # if one is inside another we compute euclidean distance
-        (xc1, yc1) = ((obj1.x0 + obj1.x1) / 2, (obj1.y0 + obj1.y1) / 2)
-        (xc2, yc2) = ((obj2.x0 + obj2.x1) / 2, (obj2.y0 + obj2.y1) / 2)
-        return xc1 - xc2, yc1 - yc2
-    else:
+    if iw >= 0 or ih >= 0:
         return max(0, iw), max(0, ih)
+    # if one is inside another we compute euclidean distance
+    (xc1, yc1) = ((obj1.x0 + obj1.x1) / 2, (obj1.y0 + obj1.y1) / 2)
+    (xc2, yc2) = ((obj2.x0 + obj2.x1) / 2, (obj2.y0 + obj2.y1) / 2)
+    return xc1 - xc2, yc1 - yc2
 
 
 LTComponentT = TypeVar("LTComponentT", bound="LTComponent")

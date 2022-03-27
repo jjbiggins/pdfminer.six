@@ -7,7 +7,7 @@ def prof_main(argv: List[str]) -> int:
     import hotshot.stats  # type: ignore[import]
 
     def usage() -> int:
-        print("usage: %s module.function [args ...]" % argv[0])
+        print(f"usage: {argv[0]} module.function [args ...]")
         return 100
 
     args = argv[1:]

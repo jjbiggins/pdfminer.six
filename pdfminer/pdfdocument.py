@@ -310,14 +310,14 @@ class PDFXRefStream(PDFBaseXRef):
                 offset = self.entlen * i
                 ent = self.data[offset : offset + self.entlen]
                 f1 = nunpack(ent[: self.fl1], 1)
-                if f1 == 1 or f1 == 2:
+                if f1 in [1, 2]:
                     yield start + i
         return
 
     def get_pos(self, objid: int) -> Tuple[Optional[int], int, int]:
         index = 0
         for (start, nobjs) in self.ranges:
-            if start <= objid and objid < start + nobjs:
+            if start <= objid < start + nobjs:
                 index += objid - start
                 break
             else:
@@ -394,16 +394,15 @@ class PDFStandardSecurityHandler:
         if self.r == 2:
             # Algorithm 3.4
             return Arcfour(key).encrypt(self.PASSWORD_PADDING)  # 2
-        else:
-            # Algorithm 3.5
-            hash = md5(self.PASSWORD_PADDING)  # 2
-            hash.update(self.docid[0])  # 3
-            result = Arcfour(key).encrypt(hash.digest())  # 4
-            for i in range(1, 20):  # 5
-                k = b"".join(bytes((c ^ i,)) for c in iter(key))
-                result = Arcfour(k).encrypt(result)
-            result += result  # 6
-            return result
+        # Algorithm 3.5
+        hash = md5(self.PASSWORD_PADDING)  # 2
+        hash.update(self.docid[0])  # 3
+        result = Arcfour(key).encrypt(hash.digest())  # 4
+        for i in range(1, 20):  # 5
+            k = b"".join(bytes((c ^ i,)) for c in iter(key))
+            result = Arcfour(k).encrypt(result)
+        result += result  # 6
+        return result
 
     def compute_encryption_key(self, password: bytes) -> bytes:
         # Algorithm 3.2
@@ -413,9 +412,11 @@ class PDFStandardSecurityHandler:
         # See https://github.com/pdfminer/pdfminer.six/issues/186
         hash.update(struct.pack("<L", self.p))  # 4
         hash.update(self.docid[0])  # 5
-        if self.r >= 4:
-            if not cast(PDFStandardSecurityHandlerV4, self).encrypt_metadata:
-                hash.update(b"\xff\xff\xff\xff")
+        if (
+            self.r >= 4
+            and not cast(PDFStandardSecurityHandlerV4, self).encrypt_metadata
+        ):
+            hash.update(b"\xff\xff\xff\xff")
         result = hash.digest()
         n = 5
         if self.r >= 3:
@@ -433,10 +434,7 @@ class PDFStandardSecurityHandler:
 
     def authenticate_user_password(self, password: bytes) -> Optional[bytes]:
         key = self.compute_encryption_key(password)
-        if self.verify_encryption_key(key):
-            return key
-        else:
-            return None
+        return key if self.verify_encryption_key(key) else None
 
     def verify_encryption_key(self, key: bytes) -> bool:
         # Algorithm 3.6
@@ -452,9 +450,7 @@ class PDFStandardSecurityHandler:
         if self.r >= 3:
             for _ in range(50):
                 hash = md5(hash.digest())
-        n = 5
-        if self.r >= 3:
-            n = self.length // 8
+        n = self.length // 8 if self.r >= 3 else 5
         key = hash.digest()[:n]
         if self.r == 2:
             user_password = Arcfour(key).decrypt(self.o)
@@ -574,10 +570,7 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
         return
 
     def get_cfm(self, name: str) -> Optional[Callable[[int, int, bytes], bytes]]:
-        if name == "AESV3":
-            return self.decrypt_aes256
-        else:
-            return None
+        return self.decrypt_aes256 if name == "AESV3" else None
 
     def authenticate(self, password: str) -> Optional[bytes]:
         password_b = self._normalize_password(password)
@@ -615,7 +608,7 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
         """
         if self.r == 5:
             return self._r5_password(password, salt, vector)
-        return self._r6_password(password, salt[0:8], vector)
+        return self._r6_password(password, salt[:8], vector)
 
     def _r5_password(
         self, password: bytes, salt: bytes, vector: Optional[bytes] = None
@@ -733,13 +726,7 @@ class PDFDocument:
                 continue
             # If there's an encryption info, remember it.
             if "Encrypt" in trailer:
-                if "ID" in trailer:
-                    id_value = list_value(trailer["ID"])
-                else:
-                    # Some documents may not have a /ID, use two empty
-                    # byte strings instead. Solves
-                    # https://github.com/pdfminer/pdfminer.six/issues/594
-                    id_value = (b"", b"")
+                id_value = list_value(trailer["ID"]) if "ID" in trailer else (b"", b"")
                 self.encryption = (id_value, dict_value(trailer["Encrypt"]))
                 self._initialize_password(password)
             if "Info" in trailer:
@@ -750,9 +737,8 @@ class PDFDocument:
                 break
         else:
             raise PDFSyntaxError("No /Root object! - Is this really a PDF?")
-        if self.catalog.get("Type") is not LITERAL_CATALOG:
-            if settings.STRICT:
-                raise PDFSyntaxError("Catalog not found!")
+        if self.catalog.get("Type") is not LITERAL_CATALOG and settings.STRICT:
+            raise PDFSyntaxError("Catalog not found!")
         return
 
     KEYWORD_OBJ = KWD(b"obj")
@@ -793,9 +779,8 @@ class PDFDocument:
         return obj
 
     def _get_objects(self, stream: PDFStream) -> Tuple[List[object], int]:
-        if stream.get("Type") is not LITERAL_OBJSTM:
-            if settings.STRICT:
-                raise PDFSyntaxError("Not a stream object: %r" % stream)
+        if stream.get("Type") is not LITERAL_OBJSTM and settings.STRICT:
+            raise PDFSyntaxError("Not a stream object: %r" % stream)
         try:
             n = cast(int, stream["N"])
         except KeyError:
@@ -887,13 +872,12 @@ class PDFDocument:
 
         def search(entry: object, level: int) -> Iterator[PDFDocument.OutlineType]:
             entry = dict_value(entry)
-            if "Title" in entry:
-                if "A" in entry or "Dest" in entry:
-                    title = decode_text(str_value(entry["Title"]))
-                    dest = entry.get("Dest")
-                    action = entry.get("A")
-                    se = entry.get("SE")
-                    yield (level, title, dest, action, se)
+            if "Title" in entry and ("A" in entry or "Dest" in entry):
+                title = decode_text(str_value(entry["Title"]))
+                dest = entry.get("Dest")
+                action = entry.get("A")
+                se = entry.get("SE")
+                yield (level, title, dest, action, se)
             if "First" in entry and "Last" in entry:
                 yield from search(entry["First"], level + 1)
             if "Next" in entry:
@@ -941,8 +925,7 @@ class PDFDocument:
                 return names[key]
             if "Kids" in d:
                 for c in list_value(d["Kids"]):
-                    v = lookup(dict_value(c))
-                    if v:
+                    if v := lookup(dict_value(c)):
                         return v
             raise KeyError((cat, key))
 
@@ -997,12 +980,11 @@ class PDFDocument:
             parser.seek(pos)
             parser.reset()
             xref: PDFBaseXRef = PDFXRefStream()
-            xref.load(parser)
         else:
             if token is parser.KEYWORD_XREF:
                 parser.nextline()
             xref = PDFXRef()
-            xref.load(parser)
+        xref.load(parser)
         xrefs.append(xref)
         trailer = xref.get_trailer()
         log.debug("trailer: %r", trailer)
@@ -1057,18 +1039,17 @@ class PageLabels(NumberTree):
     def _format_page_label(value: int, style: Any) -> str:
         """Format page label value in a specific style"""
         if style is None:
-            label = ""
+            return ""
         elif style is LIT("D"):  # Decimal arabic numerals
-            label = str(value)
+            return str(value)
         elif style is LIT("R"):  # Uppercase roman numerals
-            label = format_int_roman(value).upper()
+            return format_int_roman(value).upper()
         elif style is LIT("r"):  # Lowercase roman numerals
-            label = format_int_roman(value)
+            return format_int_roman(value)
         elif style is LIT("A"):  # Uppercase letters A-Z, AA-ZZ...
-            label = format_int_alpha(value).upper()
+            return format_int_alpha(value).upper()
         elif style is LIT("a"):  # Lowercase letters a-z, aa-zz...
-            label = format_int_alpha(value)
+            return format_int_alpha(value)
         else:
             log.warning("Unknown page label style: %r", style)
-            label = ""
-        return label
+            return ""

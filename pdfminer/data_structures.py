@@ -28,9 +28,7 @@ class NumberTree:
     def _parse(self) -> List[Tuple[int, Any]]:
         items = []
         if self.nums:  # Leaf node
-            for k, v in choplist(2, self.nums):
-                items.append((int_value(k), v))
-
+            items.extend((int_value(k), v) for k, v in choplist(2, self.nums))
         if self.kids:  # Root or intermediate node
             for child_ref in self.kids:
                 items += NumberTree(child_ref)._parse()
@@ -44,7 +42,7 @@ class NumberTree:
         values = self._parse()
 
         if settings.STRICT:
-            if not all(a[0] <= b[0] for a, b in zip(values, values[1:])):
+            if any(a[0] > b[0] for a, b in zip(values, values[1:])):
                 raise PDFSyntaxError("Number tree elements are out of order")
         else:
             values.sort(key=lambda t: t[0])

@@ -9,8 +9,7 @@ def run_with_string(sample_path, laparams=None):
     if laparams is None:
         laparams = {}
     absolute_path = absolute_sample_path(sample_path)
-    s = extract_text(absolute_path, laparams=LAParams(**laparams))
-    return s
+    return extract_text(absolute_path, laparams=LAParams(**laparams))
 
 
 def run_with_file(sample_path):

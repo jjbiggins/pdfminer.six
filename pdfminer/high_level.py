@@ -64,32 +64,14 @@ def extract_text_to_fp(
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    imagewriter = None
-    if output_dir:
-        imagewriter = ImageWriter(output_dir)
-
+    imagewriter = ImageWriter(output_dir) if output_dir else None
     rsrcmgr = PDFResourceManager(caching=not disable_caching)
     device: Optional[PDFDevice] = None
 
     if output_type != "text" and outfp == sys.stdout:
         outfp = sys.stdout.buffer
 
-    if output_type == "text":
-        device = TextConverter(
-            rsrcmgr, outfp, codec=codec, laparams=laparams, imagewriter=imagewriter
-        )
-
-    elif output_type == "xml":
-        device = XMLConverter(
-            rsrcmgr,
-            outfp,
-            codec=codec,
-            laparams=laparams,
-            imagewriter=imagewriter,
-            stripcontrol=strip_control,
-        )
-
-    elif output_type == "html":
+    if output_type == "html":
         device = HTMLConverter(
             rsrcmgr,
             outfp,
@@ -103,6 +85,21 @@ def extract_text_to_fp(
     elif output_type == "tag":
         # Binary I/O is required, but we have no good way to test it here.
         device = TagExtractor(rsrcmgr, cast(BinaryIO, outfp), codec=codec)
+
+    elif output_type == "text":
+        device = TextConverter(
+            rsrcmgr, outfp, codec=codec, laparams=laparams, imagewriter=imagewriter
+        )
+
+    elif output_type == "xml":
+        device = XMLConverter(
+            rsrcmgr,
+            outfp,
+            codec=codec,
+            laparams=laparams,
+            imagewriter=imagewriter,
+            stripcontrol=strip_control,
+        )
 
     else:
         msg = f"Output type can be text, html, xml or tag but is " f"{output_type}"
@@ -198,5 +195,4 @@ def extract_pages(
             fp, page_numbers, maxpages=maxpages, password=password, caching=caching
         ):
             interpreter.process_page(page)
-            layout = device.get_result()
-            yield layout
+            yield device.get_result()

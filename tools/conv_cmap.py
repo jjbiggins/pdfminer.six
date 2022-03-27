@@ -23,7 +23,7 @@ class CMapConverter:
         elif enc == "H":
             (hmapenc, vmapenc) = ("H", "V")
         else:
-            (hmapenc, vmapenc) = (enc + "-H", enc + "-V")
+            (hmapenc, vmapenc) = f'{enc}-H', f'{enc}-V'
         if hmapenc in self.code2cid:
             hmap = self.code2cid[hmapenc]
         else:
@@ -154,9 +154,7 @@ def main(argv):
     import os.path
 
     def usage():
-        print(
-            "usage: %s [-c enc=codec] output_dir regname [cid2code.txt ...]" % argv[0]
-        )
+        print(f"usage: {argv[0]} [-c enc=codec] output_dir regname [cid2code.txt ...]")
         return 100
 
     try:
