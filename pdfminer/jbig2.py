@@ -43,7 +43,7 @@ def check_flag(flag: int, value: int) -> bool:
 
 
 def masked_value(mask: int, value: int) -> int:
-    for bit_pos in range(0, 31):
+    for bit_pos in range(31):
         if bit_set(bit_pos, mask):
             return (value & mask) >> bit_pos
 
@@ -51,7 +51,7 @@ def masked_value(mask: int, value: int) -> int:
 
 
 def mask_value(mask: int, value: int) -> int:
-    for bit_pos in range(0, 31):
+    for bit_pos in range(31):
         if bit_set(bit_pos, mask):
             return (value & (mask >> bit_pos)) << bit_pos
 
@@ -88,7 +88,7 @@ class JBIG2StreamReader:
                     segment["_error"] = True
                     break
                 value = unpack_int(field_format, field)
-                parser = getattr(self, "parse_%s" % name, None)
+                parser = getattr(self, f"parse_{name}", None)
                 if callable(parser):
                     value = parser(segment, value, field)
                 segment[name] = value
@@ -100,9 +100,8 @@ class JBIG2StreamReader:
     def is_eof(self) -> bool:
         if self.stream.read(1) == b"":
             return True
-        else:
-            self.stream.seek(-1, os.SEEK_CUR)
-            return False
+        self.stream.seek(-1, os.SEEK_CUR)
+        return False
 
     def parse_flags(
         self, segment: JBIG2Segment, flags: int, field: bytes
@@ -121,18 +120,15 @@ class JBIG2StreamReader:
         ref_segments = []
 
         if ref_count < REF_COUNT_LONG:
-            for bit_pos in range(5):
-                retain_segments.append(bit_set(bit_pos, flags))
+            retain_segments.extend(bit_set(bit_pos, flags) for bit_pos in range(5))
         else:
             field += self.stream.read(3)
             ref_count = unpack_int(">L", field)
             ref_count = masked_value(REF_COUNT_LONG_MASK, ref_count)
             ret_bytes_count = int(math.ceil((ref_count + 1) / 8))
-            for ret_byte_index in range(ret_bytes_count):
+            for _ in range(ret_bytes_count):
                 ret_byte = unpack_int(">B", self.stream.read(1))
-                for bit_pos in range(7):
-                    retain_segments.append(bit_set(bit_pos, ret_byte))
-
+                retain_segments.extend(bit_set(bit_pos, ret_byte) for bit_pos in range(7))
         seg_num = segment["number"]
         assert isinstance(seg_num, int)
         if seg_num <= 256:
@@ -144,7 +140,7 @@ class JBIG2StreamReader:
 
         ref_size = calcsize(ref_format)
 
-        for ref_index in range(ref_count):
+        for _ in range(ref_count):
             ref_data = self.stream.read(ref_size)
             ref = unpack_int(ref_format, ref_data)
             ref_segments.append(ref)
@@ -243,10 +239,7 @@ class JBIG2StreamWriter:
         for segment in segments:
             seg_num = cast(int, segment["number"])
 
-        if fix_last_page:
-            seg_num_offset = 2
-        else:
-            seg_num_offset = 1
+        seg_num_offset = 2 if fix_last_page else 1
         eof_segment = self.get_eof_segment(seg_num + seg_num_offset)
         data = self.encode_segment(eof_segment)
 
@@ -259,7 +252,7 @@ class JBIG2StreamWriter:
         data = b""
         for field_format, name in SEG_STRUCT:
             value = segment.get(name)
-            encoder = getattr(self, "encode_%s" % name, None)
+            encoder = getattr(self, f"encode_{name}", None)
             if callable(encoder):
                 field = encoder(value, segment)
             else:

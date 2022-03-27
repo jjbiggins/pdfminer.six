@@ -12,9 +12,9 @@ def run(sample_path, options=None):
     absolute_path = absolute_sample_path(sample_path)
     with TemporaryFilePath() as output_file_name:
         if options:
-            s = "pdf2txt -o{} {} {}".format(output_file_name, options, absolute_path)
+            s = f"pdf2txt -o{output_file_name} {options} {absolute_path}"
         else:
-            s = "pdf2txt -o{} {}".format(output_file_name, absolute_path)
+            s = f"pdf2txt -o{output_file_name} {absolute_path}"
 
         pdf2txt.main(s.split(" ")[1:])
 
@@ -158,9 +158,10 @@ class TestDumpImages:
         try:
             assert image_files[0].endswith(".jb2")
             assert filecmp.cmp(
-                output_dir + "/" + image_files[0],
+                f'{output_dir}/{image_files[0]}',
                 absolute_sample_path("../samples/contrib/XIPLAYER0.jb2"),
             )
+
         finally:
             rmtree(output_dir)
 

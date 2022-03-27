@@ -146,13 +146,12 @@ def literal_name(x: object) -> Any:
 
 
 def keyword_name(x: object) -> Any:
-    if not isinstance(x, PSKeyword):
-        if settings.STRICT:
-            raise PSTypeError("Keyword required: %r" % x)
-        else:
-            name = x
-    else:
+    if isinstance(x, PSKeyword):
         name = str(x.name, "utf-8", "ignore")
+    elif settings.STRICT:
+        raise PSTypeError("Keyword required: %r" % x)
+    else:
+        name = x
     return name
 
 
@@ -254,8 +253,7 @@ class PSBaseParser:
                     linebuf += c
                     self.charpos += 1
                 break
-            m = EOL.search(self.buf, self.charpos)
-            if m:
+            if m := EOL.search(self.buf, self.charpos):
                 linebuf += self.buf[self.charpos : m.end(0)]
                 self.charpos = m.end(0)
                 if linebuf[-1:] == b"\r":
@@ -277,7 +275,7 @@ class PSBaseParser:
         self.fp.seek(0, 2)
         pos = self.fp.tell()
         buf = b""
-        while 0 < pos:
+        while pos > 0:
             prevpos = pos
             pos = max(0, pos - self.BUFSIZ)
             self.fp.seek(pos)
@@ -304,39 +302,32 @@ class PSBaseParser:
         if c == b"%":
             self._curtoken = b"%"
             self._parse1 = self._parse_comment
-            return j + 1
         elif c == b"/":
             self._curtoken = b""
             self._parse1 = self._parse_literal
-            return j + 1
         elif c in b"-+" or c.isdigit():
             self._curtoken = c
             self._parse1 = self._parse_number
-            return j + 1
         elif c == b".":
             self._curtoken = c
             self._parse1 = self._parse_float
-            return j + 1
         elif c.isalpha():
             self._curtoken = c
             self._parse1 = self._parse_keyword
-            return j + 1
         elif c == b"(":
             self._curtoken = b""
             self.paren = 1
             self._parse1 = self._parse_string
-            return j + 1
         elif c == b"<":
             self._curtoken = b""
             self._parse1 = self._parse_wopen
-            return j + 1
         elif c == b">":
             self._curtoken = b""
             self._parse1 = self._parse_wclose
-            return j + 1
         else:
             self._add_token(KWD(c))
-            return j + 1
+
+        return j + 1
 
     def _add_token(self, obj: PSBaseParserToken) -> None:
         self._tokens.append((self._curtokenpos, obj))

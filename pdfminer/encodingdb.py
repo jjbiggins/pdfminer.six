@@ -37,30 +37,29 @@ def name2unicode(name: str) -> str:
     if len(components) > 1:
         return "".join(map(name2unicode, components))
 
-    else:
-        if name in glyphname2unicode:
-            return glyphname2unicode[name]
+    if name in glyphname2unicode:
+        return glyphname2unicode[name]
 
-        elif name.startswith("uni"):
-            name_without_uni = name.strip("uni")
+    elif name.startswith("uni"):
+        name_without_uni = name.strip("uni")
 
-            if HEXADECIMAL.match(name_without_uni) and len(name_without_uni) % 4 == 0:
-                unicode_digits = [
-                    int(name_without_uni[i : i + 4], base=16)
-                    for i in range(0, len(name_without_uni), 4)
-                ]
-                for digit in unicode_digits:
-                    raise_key_error_for_invalid_unicode(digit)
-                characters = map(chr, unicode_digits)
-                return "".join(characters)
+        if HEXADECIMAL.match(name_without_uni) and len(name_without_uni) % 4 == 0:
+            unicode_digits = [
+                int(name_without_uni[i : i + 4], base=16)
+                for i in range(0, len(name_without_uni), 4)
+            ]
+            for digit in unicode_digits:
+                raise_key_error_for_invalid_unicode(digit)
+            characters = map(chr, unicode_digits)
+            return "".join(characters)
 
-        elif name.startswith("u"):
-            name_without_u = name.strip("u")
+    elif name.startswith("u"):
+        name_without_u = name.strip("u")
 
-            if HEXADECIMAL.match(name_without_u) and 4 <= len(name_without_u) <= 6:
-                unicode_digit = int(name_without_u, base=16)
-                raise_key_error_for_invalid_unicode(unicode_digit)
-                return chr(unicode_digit)
+        if HEXADECIMAL.match(name_without_u) and 4 <= len(name_without_u) <= 6:
+            unicode_digit = int(name_without_u, base=16)
+            raise_key_error_for_invalid_unicode(unicode_digit)
+            return chr(unicode_digit)
 
     raise KeyError(
         'Could not convert unicode name "%s" to character because '

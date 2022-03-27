@@ -39,13 +39,13 @@ class TestPlane:
     def test_find_nothing_in_empty_bbox(self):
         plane, _ = self.given_plane_with_one_object()
         result = list(plane.find((50, 50, 100, 100)))
-        assert result == []
+        assert not result
 
     def test_find_nothing_after_removing(self):
         plane, obj = self.given_plane_with_one_object()
         plane.remove(obj)
         result = list(plane.find((0, 0, 100, 100)))
-        assert result == []
+        assert not result
 
     def test_find_object_in_whole_plane(self):
         plane, obj = self.given_plane_with_one_object()

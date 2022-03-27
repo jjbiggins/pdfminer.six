@@ -18,7 +18,7 @@ def main(argv):
             fonts[fontname] = (props, chars)
         elif k == "C":
             cid = int(f[1])
-            if 0 <= cid and cid <= 255:
+            if 0 <= cid <= 255:
                 width = int(f[4])
                 chars[cid] = width
         elif k in ("CapHeight", "XHeight", "ItalicAngle", "Ascender", "Descender"):

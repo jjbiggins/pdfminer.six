@@ -102,9 +102,7 @@ class LAParams:
             boxes_flow_err_msg = (
                 "LAParam boxes_flow should be None, or a " "number between -1 and +1"
             )
-            if not (
-                isinstance(self.boxes_flow, int) or isinstance(self.boxes_flow, float)
-            ):
+            if not isinstance(self.boxes_flow, (int, float)):
                 raise TypeError(boxes_flow_err_msg)
             if not -1 <= self.boxes_flow <= 1:
                 raise ValueError(boxes_flow_err_msg)
@@ -144,7 +142,7 @@ class LTComponent(LTItem):
         self.set_bbox(bbox)
 
     def __repr__(self) -> str:
-        return "<%s %s>" % (self.__class__.__name__, bbox2str(self.bbox))
+        return f"<{self.__class__.__name__} {bbox2str(self.bbox)}>"
 
     # Disable comparison.
     def __lt__(self, _: object) -> bool:
@@ -363,10 +361,7 @@ class LTChar(LTComponent, LTText):
             # vertical
             assert isinstance(textdisp, tuple)
             (vx, vy) = textdisp
-            if vx is None:
-                vx = fontsize * 0.5
-            else:
-                vx = vx * fontsize * 0.001
+            vx = fontsize * 0.5 if vx is None else vx * fontsize * 0.001
             vy = (1000 - vy) * fontsize * 0.001
             bbox_lower_left = (-vx, vy + rise + self.adv)
             bbox_upper_right = (-vx + fontsize, vy + rise)
@@ -376,7 +371,7 @@ class LTChar(LTComponent, LTText):
             bbox_lower_left = (0, descent + rise)
             bbox_upper_right = (self.adv, descent + rise + fontsize)
         (a, b, c, d, e, f) = self.matrix
-        self.upright = 0 < a * d * scaling and b * c <= 0
+        self.upright = a * d * scaling > 0 and b * c <= 0
         (x0, y0) = apply_matrix_pt(self.matrix, bbox_lower_left)
         (x1, y1) = apply_matrix_pt(self.matrix, bbox_upper_right)
         if x1 < x0:
@@ -384,10 +379,7 @@ class LTChar(LTComponent, LTText):
         if y1 < y0:
             (y0, y1) = (y1, y0)
         LTComponent.__init__(self, (x0, y0, x1, y1))
-        if font.is_vertical():
-            self.size = self.width
-        else:
-            self.size = self.height
+        self.size = self.width if font.is_vertical() else self.height
         return
 
     def __repr__(self) -> str:
@@ -790,20 +782,19 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 elif line is not None:
                     yield line
                     line = None
+                elif valign and not halign:
+                    line = LTTextLineVertical(laparams.word_margin)
+                    line.add(obj0)
+                    line.add(obj1)
+                elif halign and not valign:
+                    line = LTTextLineHorizontal(laparams.word_margin)
+                    line.add(obj0)
+                    line.add(obj1)
                 else:
-                    if valign and not halign:
-                        line = LTTextLineVertical(laparams.word_margin)
-                        line.add(obj0)
-                        line.add(obj1)
-                    elif halign and not valign:
-                        line = LTTextLineHorizontal(laparams.word_margin)
-                        line.add(obj0)
-                        line.add(obj1)
-                    else:
-                        line = LTTextLineHorizontal(laparams.word_margin)
-                        line.add(obj0)
-                        yield line
-                        line = None
+                    line = LTTextLineHorizontal(laparams.word_margin)
+                    line.add(obj0)
+                    yield line
+                    line = None
             obj0 = obj1
         if line is None:
             line = LTTextLineHorizontal(laparams.word_margin)
@@ -993,12 +984,7 @@ class LTFigure(LTLayoutContainer):
         return
 
     def __repr__(self) -> str:
-        return "<%s(%s) %s matrix=%s>" % (
-            self.__class__.__name__,
-            self.name,
-            bbox2str(self.bbox),
-            matrix2str(self.matrix),
-        )
+        return f"<{self.__class__.__name__}({self.name}) {bbox2str(self.bbox)} matrix={matrix2str(self.matrix)}>"
 
     def analyze(self, laparams: LAParams) -> None:
         if not laparams.all_texts:

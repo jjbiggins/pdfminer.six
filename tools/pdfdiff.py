@@ -31,7 +31,7 @@ def compare(file1: str, file2: str, **kwargs: Any) -> Iterable[str]:
             "line_margin",
             "boxes_flow",
         ):
-            paramv = kwargs.get(param, None)
+            paramv = kwargs.get(param)
             if paramv is not None:
                 setattr(laparams, param, paramv)
         kwargs["laparams"] = laparams

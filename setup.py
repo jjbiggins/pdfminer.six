@@ -8,8 +8,9 @@ sys.path.append(str(Path(__file__).parent))
 import pdfminer as package
 
 
-with open(path.join(path.abspath(path.dirname(__file__)), "README.md")) as f:
-    readme = f.read()
+readme = Path(
+    path.join(path.abspath(path.dirname(__file__)), "README.md")
+).read_text()
 
 setup(
     name="pdfminer.six",

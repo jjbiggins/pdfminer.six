@@ -189,17 +189,17 @@ def getdict(data: bytes) -> Dict[int, List[Union[float, int]]]:
                         assert nibble is not None
                         s += nibble
             value = float(s)
-        elif 32 <= b0 and b0 <= 246:
+        elif 32 <= b0 <= 246:
             value = b0 - 139
         else:
             b1 = ord(fp.read(1))
-            if 247 <= b0 and b0 <= 250:
+            if 247 <= b0 <= 250:
                 value = ((b0 - 247) << 8) + b1 + 108
-            elif 251 <= b0 and b0 <= 254:
+            elif 251 <= b0 <= 254:
                 value = -((b0 - 251) << 8) - b1 - 108
             else:
                 b2 = ord(fp.read(1))
-                if 128 <= b1:
+                if b1 >= 128:
                     b1 -= 256
                 if b0 == 28:
                     value = b1 << 8 | b2
@@ -610,8 +610,7 @@ class CFFFont:
             self.fp = fp
             self.offsets: List[int] = []
             (count, offsize) = struct.unpack(">HB", self.fp.read(3))
-            for i in range(count + 1):
-                self.offsets.append(nunpack(self.fp.read(offsize)))
+            self.offsets.extend(nunpack(self.fp.read(offsize)) for _ in range(count + 1))
             self.base = self.fp.tell() - 1
             self.fp.seek(self.base + self.offsets[-1])
             return
@@ -667,7 +666,7 @@ class CFFFont:
             # Format 1
             (n,) = struct.unpack("B", self.fp.read(1))
             code = 0
-            for i in range(n):
+            for _ in range(n):
                 (first, nleft) = struct.unpack("BB", self.fp.read(2))
                 for gid in range(first, first + nleft + 1):
                     self.code2gid[code] = gid
@@ -694,7 +693,7 @@ class CFFFont:
             # Format 1
             (n,) = struct.unpack("B", self.fp.read(1))
             sid = 0
-            for i in range(n):
+            for _ in range(n):
                 (first, nleft) = struct.unpack("BB", self.fp.read(2))
                 for gid in range(first, first + nleft + 1):
                     sidname = self.getstr(sid)
@@ -748,11 +747,11 @@ class TrueTypeFont:
         fp = self.fp
         fp.seek(base_offset)
         (version, nsubtables) = cast(Tuple[int, int], struct.unpack(">HH", fp.read(4)))
-        subtables: List[Tuple[int, int, int]] = []
-        for i in range(nsubtables):
-            subtables.append(
-                cast(Tuple[int, int, int], struct.unpack(">HHL", fp.read(8)))
-            )
+        subtables: List[Tuple[int, int, int]] = [
+            cast(Tuple[int, int, int], struct.unpack(">HHL", fp.read(8)))
+            for _ in range(nsubtables)
+        ]
+
         char2gid: Dict[int, int] = {}
         # Only supports subtable type 0, 2 and 4.
         for (_1, _2, st_offset) in subtables:
@@ -1056,7 +1055,7 @@ class PDFCIDFont(PDFFont):
         cid_ordering = resolve1(self.cidsysteminfo.get("Ordering", b"unknown")).decode(
             "latin1"
         )
-        self.cidcoding = "{}-{}".format(cid_registry, cid_ordering)
+        self.cidcoding = f"{cid_registry}-{cid_ordering}"
         self.cmap: CMapBase = self.get_cmap_from_spec(spec, strict)
 
         try:
@@ -1084,7 +1083,7 @@ class PDFCIDFont(PDFFont):
                     or "Identity" in encoding
                 ):
                     self.unicode_map = IdentityUnicodeMap()
-        elif self.cidcoding in ("Adobe-Identity", "Adobe-UCS"):
+        elif self.cidcoding in {"Adobe-Identity", "Adobe-UCS"}:
             if ttf:
                 try:
                     self.unicode_map = ttf.create_unicode_map()
@@ -1153,9 +1152,8 @@ class PDFCIDFont(PDFFont):
             cmap_name_stream: PDFStream = cast(PDFStream, cmap_name)
             if "CMapName" in cmap_name_stream:
                 cmap_name = cmap_name_stream.get("CMapName").name
-            else:
-                if strict:
-                    raise PDFFontError("CMapName unspecified for encoding")
+            elif strict:
+                raise PDFFontError("CMapName unspecified for encoding")
 
         return IDENTITY_ENCODER.get(cmap_name, cmap_name)
 
@@ -1188,10 +1186,9 @@ class PDFCIDFont(PDFFont):
 
 def main(argv: List[str]) -> None:
     for fname in argv[1:]:
-        fp = open(fname, "rb")
-        font = CFFFont(fname, fp)
-        print(font)
-        fp.close()
+        with open(fname, "rb") as fp:
+            font = CFFFont(fname, fp)
+            print(font)
     return
 
 

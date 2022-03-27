@@ -104,30 +104,28 @@ class ImageWriter:
         filters = image.stream.get_filters()
 
         if len(filters) == 1 and filters[0][0] in LITERALS_DCT_DECODE:
-            name = self._save_jpeg(image)
+            return self._save_jpeg(image)
 
         elif len(filters) == 1 and filters[0][0] in LITERALS_JPX_DECODE:
-            name = self._save_jpeg2000(image)
+            return self._save_jpeg2000(image)
 
         elif self._is_jbig2_iamge(image):
-            name = self._save_jbig2(image)
+            return self._save_jbig2(image)
 
         elif image.bits == 1:
-            name = self._save_bmp(image, width, height, (width + 7) // 8, image.bits)
+            return self._save_bmp(image, width, height, (width + 7) // 8, image.bits)
 
         elif image.bits == 8 and LITERAL_DEVICE_RGB in image.colorspace:
-            name = self._save_bmp(image, width, height, width * 3, image.bits * 3)
+            return self._save_bmp(image, width, height, width * 3, image.bits * 3)
 
         elif image.bits == 8 and LITERAL_DEVICE_GRAY in image.colorspace:
-            name = self._save_bmp(image, width, height, width, image.bits)
+            return self._save_bmp(image, width, height, width, image.bits)
 
         elif len(filters) == 1 and filters[0][0] in LITERALS_FLATE_DECODE:
-            name = self._save_bytes(image)
+            return self._save_bytes(image)
 
         else:
-            name = self._save_raw(image)
-
-        return name
+            return self._save_raw(image)
 
     def _save_jpeg(self, image: LTImage) -> str:
         """Save a JPEG encoded image"""
@@ -179,11 +177,12 @@ class ImageWriter:
         with open(path, "wb") as fp:
             input_stream = BytesIO()
 
-            global_streams = []
             filters = image.stream.get_filters()
-            for filter_name, params in filters:
-                if filter_name in LITERALS_JBIG2_DECODE:
-                    global_streams.append(params["JBIG2Globals"].resolve())
+            global_streams = [
+                params["JBIG2Globals"].resolve()
+                for filter_name, params in filters
+                if filter_name in LITERALS_JBIG2_DECODE
+            ]
 
             if len(global_streams) > 1:
                 msg = (
@@ -254,10 +253,9 @@ class ImageWriter:
     @staticmethod
     def _is_jbig2_iamge(image: LTImage) -> bool:
         filters = image.stream.get_filters()
-        for filter_name, params in filters:
-            if filter_name in LITERALS_JBIG2_DECODE:
-                return True
-        return False
+        return any(
+            filter_name in LITERALS_JBIG2_DECODE for filter_name, params in filters
+        )
 
     def _create_unique_image_name(self, image: LTImage, ext: str) -> Tuple[str, str]:
         name = image.name + ext
